@@ -83,6 +83,26 @@ table.m tfoot td:first-child{background:#f2f7f4}
 </style>
 </head>
 <body>
+<div id="growgate" style="position:fixed;inset:0;background:linear-gradient(135deg,#22a55c,#15733f);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <div style="background:#fff;padding:30px 32px;border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.25);text-align:center;width:320px;max-width:90%">
+    <div style="background:#22a55c;color:#fff;display:inline-flex;flex-direction:column;align-items:flex-start;line-height:1;padding:9px 15px;border-radius:12px"><b style="font-size:22px;font-weight:800;letter-spacing:.5px">GR&Ocirc;W</b><span style="font-size:8px;letter-spacing:3px;font-weight:700;margin-top:3px">REAL ESTATE</span></div>
+    <div style="color:#6b7686;font-size:12.5px;margin:16px 0 14px">Dashboard comercial · acceso restringido</div>
+    <input id="growpw" type="password" placeholder="Contraseña" style="width:100%;padding:10px 12px;border:1px solid #e4ebe6;border-radius:10px;font-size:14px;outline:none">
+    <button id="growbtn" style="width:100%;margin-top:10px;padding:10px;background:#22a55c;color:#fff;border:0;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Entrar</button>
+    <div id="growerr" style="color:#d6453d;font-size:12px;margin-top:8px;display:none">Contraseña incorrecta</div>
+  </div>
+</div>
+<script>
+(function(){
+  var PW="grow2026";
+  var g=document.getElementById('growgate');
+  document.documentElement.style.overflow='hidden';
+  function chk(){ if(document.getElementById('growpw').value===PW){ g.parentNode.removeChild(g); document.documentElement.style.overflow=''; } else { document.getElementById('growerr').style.display='block'; document.getElementById('growpw').value=''; } }
+  document.getElementById('growbtn').onclick=chk;
+  document.getElementById('growpw').addEventListener('keydown',function(e){ if(e.key==='Enter') chk(); });
+  setTimeout(function(){document.getElementById('growpw').focus();},100);
+})();
+</script>
 <div class="wrap">
   <header class="top">
     <div class="brand">
