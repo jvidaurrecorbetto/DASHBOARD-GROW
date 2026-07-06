@@ -76,22 +76,35 @@ table.m td.ref,table.m th.ref{background:#f3f7f4;color:var(--grow-d)}
 table.m tfoot td{font-weight:700;border-top:2px solid var(--line);background:#f2f7f4;position:sticky;bottom:0}
 table.m tfoot td:first-child{background:#f2f7f4}
 .foot{font-size:11.5px;color:var(--muted);margin-top:24px}
+#printTables{display:none}
+#printTables .pt-wrap{margin:12px 0}
+#printTables .pt-title{font-size:12px;font-weight:700;color:var(--grow-d);margin:0 0 4px;border-bottom:1px solid var(--grow);padding-bottom:2px}
+table.pt{width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed}
+table.pt th,table.pt td{padding:2px 4px;text-align:right;border-bottom:.5px solid var(--line);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.pt th:first-child,table.pt td:first-child{text-align:left}
+table.pt thead th{color:var(--muted);font-weight:600;border-bottom:1px solid #cfe0d5}
+table.pt tfoot td{font-weight:700;border-top:1px solid var(--grow)}
+table.pt td.demas{font-style:italic;color:var(--muted)}
+table.pt td .subn{font-weight:400}
 @media print{
   .filters,.tag,.meta{display:none!important}
+  #stDetalle,#accCanal,#accAse,#accProy,#accInmo{display:none!important}
+  #printTables{display:block!important}
   .acctgl{display:none!important}
   .acc .accbody{display:block!important}
   #printHead{display:block!important}
-  body{background:#fff}
+  body{background:#fff;font-size:11px}
   .wrap{max-width:none;padding:0}
   .card,.panel,.acc{box-shadow:none;border-color:#d8e3dc}
-  .cards{gap:8px;margin-top:8px}
+  .cards{gap:6px;margin-top:8px}
+  .kpi-val{font-size:17px}
   .section-title{margin:10px 2px 5px}
   .acc{margin-bottom:8px}
   .accbody{padding:0 10px 8px}
-  .matbox{max-height:none;overflow:visible;border:none}
-  .chart-box{height:300px}
-  table.m tr,table.m thead,canvas,img{break-inside:avoid}
-  @page{size:A4 landscape;margin:8mm}
+  .chart-box{height:210px}
+  .pt-wrap,table.pt tr,table.pt thead{break-inside:avoid}
+  canvas,img{break-inside:avoid}
+  @page{size:A4 portrait;margin:10mm}
 }
 </style>
 </head>
@@ -163,11 +176,13 @@ table.m tfoot td:first-child{background:#f2f7f4}
   <div class="section-title">Tendencia</div>
   <div class="acc" id="accTrend"></div>
 
-  <div class="section-title">Detalle mensual — clic en +/− para expandir o achicar cada tabla</div>
+  <div class="section-title" id="stDetalle">Detalle mensual — clic en +/− para expandir o achicar cada tabla</div>
   <div class="acc" id="accCanal"></div>
   <div class="acc" id="accAse"></div>
   <div class="acc" id="accProy"></div>
   <div class="acc" id="accInmo"></div>
+
+  <div id="printTables"></div>
 
   <p class="foot" id="foot"></p>
 </div>
@@ -402,10 +417,53 @@ function filterSummary(){
   [['canal','Canal'],['ase','Asesor'],['inmo','Inmobiliaria'],['proy','Proyecto']].forEach(([d,l])=>{ if(F[d].size) parts.push(l+': '+[...F[d]].join(', ')); });
   return parts.join('  ·  ');
 }
+/* ---------- print tables (vertical: mensual si entra, si no agrupado por año) ---------- */
+function topCollapse(arr,gtot,dim){
+  if(dim==='inmo'||arr.length<=5) return {rows:arr,demas:null};
+  let n=5,cum=arr.slice(0,5).reduce((a,x)=>a+x.tot,0);
+  while(n<arr.length && gtot && (cum/gtot)<0.70){ cum+=arr[n].tot; n++; }
+  const rest=arr.slice(n);
+  if(!rest.length) return {rows:arr,demas:null};
+  const demas={k:'Demás ('+rest.length+')',per:{},tot:0,q:0,inmo:''};
+  rest.forEach(x=>{ demas.tot+=x.tot; demas.q+=x.q; for(const p in x.per) demas.per[p]=(demas.per[p]||0)+x.per[p]; });
+  return {rows:arr.slice(0,n),demas};
+}
+function buildPrintTable(dim,title,withInmo){
+  const fr=filteredRows();
+  const monthly=timelineCols().length<=8;
+  const cols=monthly ? timelineCols().map(c=>({key:c.y*100+c.m,label:c.label}))
+            : (SY.size>=2 ? [...SY].sort((a,b)=>a-b).map(y=>({key:y,label:String(y)})) : []);
+  const map={};
+  fr.forEach(r=>{ const k=r[dim]; if(!map[k])map[k]={k,per:{},tot:0,q:0,inmo:r.inmo};
+    const pk=monthly?r.y*100+r.m:r.y;
+    map[k].per[pk]=(map[k].per[pk]||0)+r.monto; map[k].tot+=r.monto; map[k].q+=r.u; });
+  let arr=Object.values(map).sort((a,b)=>b.tot-a.tot);
+  const gtot=arr.reduce((s,x)=>s+x.tot,0), gq=arr.reduce((s,x)=>s+x.q,0);
+  const {rows,demas}=topCollapse(arr,gtot,dim);
+  let th=`<thead><tr><th>${title.replace(/^Por /,'')}</th>`;
+  cols.forEach(c=>th+=`<th>${c.label}</th>`);
+  th+='<th>Total</th><th>Q</th><th>%</th></tr></thead>';
+  const rowHtml=(x,cls)=>{ let s=`<tr><td class="${cls||''}">${esc(x.k)}${withInmo&&x.inmo?`<span class="subn"> · ${esc(x.inmo)}</span>`:''}</td>`;
+    cols.forEach(c=>{const v=x.per[c.key]||0; s+=`<td>${v?fmtM(v):'—'}</td>`;});
+    s+=`<td>${fmtM(x.tot)}</td><td>${x.q}</td><td>${gtot?(x.tot/gtot*100).toFixed(1):0}%</td></tr>`; return s; };
+  let tb='<tbody>'; rows.forEach(x=>tb+=rowHtml(x)); if(demas) tb+=rowHtml(demas,'demas'); tb+='</tbody>';
+  let tf='<tfoot><tr><td>Total</td>';
+  cols.forEach(c=>{const s=arr.reduce((a,x)=>a+(x.per[c.key]||0),0);tf+=`<td>${fmtM(s)}</td>`;});
+  tf+=`<td>${fmtM(gtot)}</td><td>${gq}</td><td>100%</td></tr></tfoot>`;
+  return `<div class="pt-wrap"><div class="pt-title">${title}</div><table class="pt">${th}${tb}${tf}</table></div>`;
+}
+function buildPrintTables(){
+  document.getElementById('printTables').innerHTML=
+    buildPrintTable('canal','Por canal',false)+
+    buildPrintTable('ase','Por asesor',false)+
+    buildPrintTable('proy','Por proyecto',true)+
+    buildPrintTable('inmo','Por inmobiliaria',false);
+}
 function printReport(){
   const saved=Object.assign({},OPEN);
-  Object.keys(OPEN).forEach(k=>OPEN[k]=true);
+  OPEN.trend=true;
   renderData();
+  buildPrintTables();
   const V=filteredRows();
   document.getElementById('printSummary').innerHTML='<b>Filtros:</b> '+esc(filterSummary())+' &nbsp;|&nbsp; <b>Ventas:</b> '+fmtS(V.reduce((a,r)=>a+r.monto,0))+' &nbsp;·&nbsp; <b>Q minutas:</b> '+V.reduce((a,r)=>a+r.u,0)+' &nbsp;·&nbsp; Generado '+esc(DATA.generatedAt||'');
   window.onafterprint=()=>{ Object.assign(OPEN,saved); renderData(); window.onafterprint=null; };
