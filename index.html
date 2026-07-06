@@ -377,7 +377,7 @@ function drawTrend(){
   const V=rowsTrend();
   const multi=SY.size>=2;
   const cols=[];
-  [...SY].sort((a,b)=>a-b).forEach(y=>{ const mh=DATA.monthHasData[String(y)]||[]; DATA.months.forEach((mn,m)=>{ if(mh[m]) cols.push({y,m,label:multi?mn+" '"+String(y).slice(2):mn}); }); });
+  [...SY].sort((a,b)=>a-b).forEach(y=>{ const mh=DATA.monthHasData[String(y)]||[]; DATA.months.forEach((mn,m)=>{ if(!mh[m]) return; if(SM.size && !SM.has(m)) return; cols.push({y,m,label:multi?mn+" '"+String(y).slice(2):mn}); }); });
   const labels=cols.map(c=>c.label);
   const qmin=cols.map(c=>V.filter(r=>r.y===c.y&&r.m===c.m).reduce((a,r)=>a+r.u,0));
   let splitDim=null; for(const dm of ['ase','proy','inmo','canal']){ if(F[dm].size>=2){ splitDim=dm; break; } }
