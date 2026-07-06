@@ -76,6 +76,7 @@ table.m td.ref,table.m th.ref{background:#f3f7f4;color:var(--grow-d)}
 table.m tfoot td{font-weight:700;border-top:2px solid var(--line);background:#f2f7f4;position:sticky;bottom:0}
 table.m tfoot td:first-child{background:#f2f7f4}
 .foot{font-size:11.5px;color:var(--muted);margin-top:24px}
+.trend-print{display:none}
 #printTables{display:none}
 #printTables .pt-wrap{margin:12px 0}
 #printTables .pt-title{font-size:12px;font-weight:700;color:var(--grow-d);margin:0 0 4px;border-bottom:1px solid var(--grow);padding-bottom:2px}
@@ -101,7 +102,8 @@ table.pt td .subn{font-weight:400}
   .section-title{margin:10px 2px 5px}
   .acc{margin-bottom:8px}
   .accbody{padding:0 10px 8px}
-  .chart-box{height:210px}
+  .chart-box{display:none!important}
+  .trend-print{display:block!important;width:100%;max-height:250px;object-fit:contain;margin:4px 0 8px}
   .pt-wrap,table.pt tr,table.pt thead{break-inside:avoid}
   canvas,img{break-inside:avoid}
   @page{size:A4 portrait;margin:10mm}
@@ -207,20 +209,39 @@ let chart=null;
 
 const valueLabels={id:'valueLabels',afterDatasetsDraw(ch){
   const ctx=ch.ctx;
+  const bars=[]; let lineMeta=null,lineDs=null;
   ch.data.datasets.forEach((ds,di)=>{
     const meta=ch.getDatasetMeta(di); if(meta.hidden) return;
-    const isV=ds.label==='Ventas S/.'; const isQ=ds.label==='Q Minutas'; if(!isV&&!isQ) return;
-    meta.data.forEach((pt,i)=>{
-      const val=ds.data[i]; if(!val) return;
-      ctx.save();
-      ctx.font='700 9px -apple-system,Segoe UI,sans-serif';
-      ctx.textAlign='center'; ctx.textBaseline='bottom';
-      const txt=isV?(val/1e6).toLocaleString('es-PE',{maximumFractionDigits:1})+'M':String(val);
-      if(isV){ ctx.fillStyle='#ffffff'; ctx.fillText(txt, pt.x, (pt.base||pt.y)-4); }
-      else { ctx.fillStyle='#2f6fed'; ctx.fillText(txt, pt.x, pt.y-3); }
-      ctx.restore();
-    });
+    if(meta.type==='bar'||ds.type==='bar') bars.push({ds,meta});
+    else if(ds.label==='Q Minutas'){ lineMeta=meta; lineDs=ds; }
   });
+  ctx.save();
+  ctx.font='700 9.5px -apple-system,Segoe UI,sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.lineJoin='round';
+  // Total de ventas (MM) en la base de cada barra (aunque esté dividida por color)
+  if(bars.length){
+    const n=bars[0].meta.data.length;
+    const zeroY=ch.scales.y.getPixelForValue(0);
+    for(let i=0;i<n;i++){
+      let tot=0; bars.forEach(b=>{ tot+=(b.ds.data[i]||0); });
+      if(!tot) continue;
+      const x=bars[0].meta.data[i].x;
+      const txt=(tot/1e6).toLocaleString('es-PE',{maximumFractionDigits:1})+'M';
+      ctx.lineWidth=3; ctx.strokeStyle='rgba(10,60,32,.85)'; ctx.strokeText(txt,x,zeroY-4);
+      ctx.fillStyle='#ffffff'; ctx.fillText(txt,x,zeroY-4);
+    }
+  }
+  // Unidades (línea) con halo blanco para que no se pierdan sobre las barras
+  if(lineMeta){
+    lineMeta.data.forEach((pt,i)=>{
+      const val=lineDs.data[i]; if(!val) return;
+      const txt=String(val);
+      ctx.lineWidth=3.5; ctx.strokeStyle='#ffffff'; ctx.strokeText(txt,pt.x,pt.y-5);
+      ctx.fillStyle='#1e4fc0'; ctx.fillText(txt,pt.x,pt.y-5);
+    });
+  }
+  ctx.restore();
 }};
 try{Chart.register(valueLabels);}catch(e){}
 
@@ -230,6 +251,14 @@ function filteredRows(){
   return DATA.rows.filter(r=>
     SY.has(r.y) &&
     (SM.size===0 || SM.has(r.m)) &&
+    (F.canal.size===0 || F.canal.has(r.canal)) &&
+    (F.ase.size===0   || F.ase.has(r.ase)) &&
+    (F.inmo.size===0  || F.inmo.has(r.inmo)) &&
+    (F.proy.size===0  || F.proy.has(r.proy)) );
+}
+function rowsTrend(){
+  return DATA.rows.filter(r=>
+    SY.has(r.y) &&
     (F.canal.size===0 || F.canal.has(r.canal)) &&
     (F.ase.size===0   || F.ase.has(r.ase)) &&
     (F.inmo.size===0  || F.inmo.has(r.inmo)) &&
@@ -339,13 +368,13 @@ function renderTrendAcc(){
   el.className='acc'+(open?'':' closed');
   el.innerHTML=`<div class="acchead"><div class="acctgl">${open?'−':'+'}</div><h3>Tendencia mensual de ventas</h3>`+
     `<span class="subn" style="margin-left:auto">${periodLabel()}</span></div>`+
-    `<div class="accbody"><p class="ph">Barras = ventas (al elegir 2+ de un filtro se dividen por color) · línea punteada = unidades.</p><div class="chart-box"><canvas id="chTrend"></canvas></div></div>`;
+    `<div class="accbody"><p class="ph">Barras = ventas (al elegir 2+ de un filtro se dividen por color) · línea punteada = unidades.</p><div class="chart-box"><canvas id="chTrend"></canvas></div><img id="trendImg" class="trend-print" alt="Tendencia mensual de ventas"></div>`;
   el.querySelector('.acchead').onclick=()=>{ OPEN.trend=!OPEN.trend; renderTrendAcc(); };
   if(open) drawTrend();
 }
 function drawTrend(){
   if(chart){try{chart.destroy()}catch(e){}}
-  const V=filteredRows();
+  const V=rowsTrend();
   const multi=SY.size>=2;
   const cols=[];
   [...SY].sort((a,b)=>a-b).forEach(y=>{ const mh=DATA.monthHasData[String(y)]||[]; DATA.months.forEach((mn,m)=>{ if(mh[m]) cols.push({y,m,label:multi?mn+" '"+String(y).slice(2):mn}); }); });
@@ -467,7 +496,7 @@ function printReport(){
   const V=filteredRows();
   document.getElementById('printSummary').innerHTML='<b>Filtros:</b> '+esc(filterSummary())+' &nbsp;|&nbsp; <b>Ventas:</b> '+fmtS(V.reduce((a,r)=>a+r.monto,0))+' &nbsp;·&nbsp; <b>Q minutas:</b> '+V.reduce((a,r)=>a+r.u,0)+' &nbsp;·&nbsp; Generado '+esc(DATA.generatedAt||'');
   window.onafterprint=()=>{ Object.assign(OPEN,saved); renderData(); window.onafterprint=null; };
-  setTimeout(()=>window.print(),450);
+  setTimeout(()=>{ try{ const im=document.getElementById('trendImg'); if(chart&&im) im.src=chart.toBase64Image('image/png',1.0); }catch(e){} setTimeout(()=>window.print(),150); },450);
 }
 function renderData(){
   const fr=filteredRows();
