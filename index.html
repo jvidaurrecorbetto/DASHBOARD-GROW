@@ -208,7 +208,8 @@ let SY=new Set([DATA.years[DATA.years.length-1]]);
 let SM=new Set();
 const F={canal:new Set(),ase:new Set(),inmo:new Set(),proy:new Set()};
 const OPEN={trend:true,canal:false,ase:false,proy:false,inmo:false,conv:false};
-const convSort={ase:{k:'med',dir:1},inmo:{k:'med',dir:1}};
+const convSort={ase:{k:'avg',dir:1},inmo:{k:'avg',dir:1}};
+let convMetric='avg';
 let chart=null;
 
 const valueLabels={id:'valueLabels',afterDatasetsDraw(ch){
@@ -523,17 +524,18 @@ function renderConv(){
   if(!ds.length){ el.innerHTML=hh+'<div class="accbody"><p class="ph">No hay minutas con ambas fechas (separación y minuta) para este filtro.</p></div>'; wire(); return; }
   let b='<div class="accbody">';
   b+=`<div class="cards" style="margin-top:2px">
-    <div class="card"><div class="kpi-label">Mediana</div><div class="kpi-val">${fmtD(med)} días</div><div class="kpi-sub">cifra principal</div><div class="accent"><span style="width:100%;background:var(--grow)"></span></div></div>
-    <div class="card"><div class="kpi-label">Promedio</div><div class="kpi-val">${avg.toFixed(1)} días</div><div class="kpi-sub">n = ${ds.length}</div><div class="accent"><span style="width:100%;background:var(--blue)"></span></div></div>
+    <div class="card"><div class="kpi-label">Promedio</div><div class="kpi-val">${avg.toFixed(1)} días</div><div class="kpi-sub">cifra principal · n = ${ds.length}</div><div class="accent"><span style="width:100%;background:var(--grow)"></span></div></div>
+    <div class="card"><div class="kpi-label">Mediana</div><div class="kpi-val">${fmtD(med)} días</div><div class="kpi-sub">referencia</div><div class="accent"><span style="width:100%;background:var(--blue)"></span></div></div>
     <div class="card"><div class="kpi-label">Cierra ≤ 15 días</div><div class="kpi-val">${p15}%</div><div class="kpi-sub">rápido</div><div class="accent"><span style="width:100%;background:var(--teal)"></span></div></div>
     <div class="card"><div class="kpi-label">Cierra ≤ 30 días</div><div class="kpi-val">${p30}%</div><div class="kpi-sub">acumulado</div><div class="accent"><span style="width:100%;background:var(--grow-d)"></span></div></div>
   </div>`;
   const cols=timelineCols();
-  const mm=cols.map(c=>{ const dd=R.filter(r=>r.y===c.y&&r.m===c.m).map(r=>r.cd); return {label:c.label,med:median(dd),n:dd.length}; });
-  const maxm=Math.max(1,...mm.map(x=>x.med||0));
-  b+=`<p class="ph" style="margin:14px 0 6px;font-weight:600;color:var(--muted)">Mediana de días por mes</p>`;
+  const mm=cols.map(c=>{ const dd=R.filter(r=>r.y===c.y&&r.m===c.m).map(r=>r.cd); const av=dd.length?dd.reduce((a,b)=>a+b,0)/dd.length:null; return {label:c.label,med:median(dd),avg:av,n:dd.length}; });
+  const mk=convMetric; const cval=x=>mk==='avg'?x.avg:x.med;
+  const maxm=Math.max(1,...mm.map(x=>cval(x)||0));
+  b+=`<div style="display:flex;align-items:center;gap:10px;margin:14px 0 6px"><span class="ph" style="margin:0;font-weight:600;color:var(--muted)">${mk==='avg'?'Promedio':'Mediana'} de días por mes</span><span style="margin-left:auto;display:inline-flex;gap:5px"><button class="cvm chip${mk==='med'?' active':''}" data-m="med">Mediana</button><button class="cvm chip${mk==='avg'?' active':''}" data-m="avg">Promedio</button></span></div>`;
   b+='<div style="display:flex;align-items:flex-end;gap:6px;height:120px;border-bottom:1px solid var(--line);padding:0 4px">';
-  mm.forEach(x=>{ const hpx=x.med?Math.max(4,Math.round(x.med/maxm*104)):0; b+=`<div style="flex:1;text-align:center;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div class="subn" style="font-size:10px">${x.med!=null?fmtD(x.med):''}</div><div style="background:#1aa3a3;height:${hpx}px;border-radius:3px 3px 0 0" title="${x.n} minutas"></div></div>`; });
+  mm.forEach(x=>{ const v=cval(x); const hpx=v?Math.max(4,Math.round(v/maxm*104)):0; b+=`<div style="flex:1;text-align:center;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div class="subn" style="font-size:10px">${v!=null?(mk==='avg'?Math.round(v):fmtD(v)):''}</div><div style="background:#1aa3a3;height:${hpx}px;border-radius:3px 3px 0 0" title="${x.n} minutas"></div></div>`; });
   b+='</div>';
   b+='<div style="display:flex;gap:6px;padding:2px 4px 0;font-size:10px;color:var(--muted)">'+mm.map(x=>`<div style="flex:1;text-align:center">${x.label}</div>`).join('')+'</div>';
   const arrow=(s,key)=>s.k===key?(s.dir>0?' ▲':' ▼'):'';
@@ -548,6 +550,7 @@ function renderConv(){
   b+='</div>';
   el.innerHTML=hh+b; wire();
   el.querySelectorAll('.sorth').forEach(th=>th.onclick=()=>{ const dim=th.dataset.dim,k=th.dataset.k; const s=convSort[dim]; if(s.k===k) s.dir*=-1; else { s.k=k; s.dir=(k==='n')?-1:1; } renderConv(); });
+  el.querySelectorAll('.cvm').forEach(bn=>bn.onclick=()=>{ convMetric=bn.dataset.m; renderConv(); });
 }
 function renderData(){
   const fr=filteredRows();
