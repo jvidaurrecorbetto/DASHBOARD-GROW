@@ -208,6 +208,7 @@ let SY=new Set([DATA.years[DATA.years.length-1]]);
 let SM=new Set();
 const F={canal:new Set(),ase:new Set(),inmo:new Set(),proy:new Set()};
 const OPEN={trend:true,canal:false,ase:false,proy:false,inmo:false,conv:false};
+const convSort={ase:{k:'med',dir:1},inmo:{k:'med',dir:1}};
 let chart=null;
 
 const valueLabels={id:'valueLabels',afterDatasetsDraw(ch){
@@ -535,15 +536,18 @@ function renderConv(){
   mm.forEach(x=>{ const hpx=x.med?Math.max(4,Math.round(x.med/maxm*104)):0; b+=`<div style="flex:1;text-align:center;display:flex;flex-direction:column;justify-content:flex-end;height:100%"><div class="subn" style="font-size:10px">${x.med!=null?fmtD(x.med):''}</div><div style="background:#1aa3a3;height:${hpx}px;border-radius:3px 3px 0 0" title="${x.n} minutas"></div></div>`; });
   b+='</div>';
   b+='<div style="display:flex;gap:6px;padding:2px 4px 0;font-size:10px;color:var(--muted)">'+mm.map(x=>`<div style="flex:1;text-align:center">${x.label}</div>`).join('')+'</div>';
-  const tbl=(title,colL,arr)=>{
-    let s=`<div style="flex:1;min-width:230px"><div style="font-size:12px;font-weight:700;color:var(--grow-d);margin:0 0 5px">${title}</div><div class="matbox" style="max-height:280px"><table class="m"><thead><tr><th>${colL}</th><th class="tot">Mediana</th><th class="ref">Prom</th><th class="ref">n</th></tr></thead><tbody>`;
-    arr.forEach(x=>{ s+=`<tr><td>${esc(x.k)}</td><td class="tot">${fmtD(x.med)} d</td><td class="ref">${x.avg.toFixed(0)}</td><td class="ref">${x.n}</td></tr>`; });
-    s+='</tbody></table></div></div>'; return s;
+  const arrow=(s,key)=>s.k===key?(s.dir>0?' ▲':' ▼'):'';
+  const tbl=(title,colL,dim)=>{
+    const s=convSort[dim]; const arr=[...convBy(dim)].sort((a,b)=>((a[s.k]-b[s.k])*s.dir)||(b.n-a.n));
+    let out=`<div style="flex:1;min-width:230px"><div style="font-size:12px;font-weight:700;color:var(--grow-d);margin:0 0 5px">${title}</div><div class="matbox" style="max-height:280px"><table class="m"><thead><tr><th>${colL}</th><th class="tot sorth" data-dim="${dim}" data-k="med" style="cursor:pointer">Mediana${arrow(s,'med')}</th><th class="ref sorth" data-dim="${dim}" data-k="avg" style="cursor:pointer">Prom${arrow(s,'avg')}</th><th class="ref sorth" data-dim="${dim}" data-k="n" style="cursor:pointer">N° Min${arrow(s,'n')}</th></tr></thead><tbody>`;
+    arr.forEach(x=>{ out+=`<tr><td>${esc(x.k)}</td><td class="tot">${fmtD(x.med)} d</td><td class="ref">${x.avg.toFixed(0)}</td><td class="ref">${x.n}</td></tr>`; });
+    out+='</tbody></table></div></div>'; return out;
   };
-  b+='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:14px">'+tbl('Por asesor (más rápido primero)','Asesor',convBy('ase'))+tbl('Por inmobiliaria','Inmobiliaria',convBy('inmo'))+'</div>';
-  b+='<p class="foot" style="margin-top:10px">Días entre «Separación» y «Minuta» de cada minuta con ambas fechas. Mediana = valor central (menos sensible a casos extremos). Respeta los filtros de arriba.</p>';
+  b+='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:14px">'+tbl('Por asesor','Asesor','ase')+tbl('Por inmobiliaria','Inmobiliaria','inmo')+'</div>';
+  b+='<p class="foot" style="margin-top:10px">Días entre «Separación» y «Minuta» de cada minuta con ambas fechas. Mediana = valor central (menos sensible a casos extremos). Respeta los filtros de arriba. Clic en «Mediana», «Prom» o «N° Min» para ordenar.</p>';
   b+='</div>';
   el.innerHTML=hh+b; wire();
+  el.querySelectorAll('.sorth').forEach(th=>th.onclick=()=>{ const dim=th.dataset.dim,k=th.dataset.k; const s=convSort[dim]; if(s.k===k) s.dir*=-1; else { s.k=k; s.dir=(k==='n')?-1:1; } renderConv(); });
 }
 function renderData(){
   const fr=filteredRows();
